@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>NigerShop Admin - Cartes</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1/build/qrcode.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 30px; background: #f8f9fa; }
+    h1 { color: #ff6600; }
+    section { background: white; padding: 20px; margin: 15px 0; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    input, button { padding: 8px; margin: 5px; border-radius: 5px; border: 1px solid #ccc; }
+    button { background-color: #007bff; color: white; border: none; cursor: pointer; }
+    button:hover { background-color: #0056b3; }
+    pre { background: #f4f4f4; padding: 10px; border-radius: 6px; overflow-x: auto; }
+    img { max-width: 120px; display: block; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>💳 NigerShop - Panneau d'administration</h1>
+
+  <!-- Génération de carte -->
+  <section>
+    <h2>1️⃣ Générer une nouvelle carte</h2>
+    <button id="btnGenerate">Générer une carte</button>
+    <div id="genResult"></div>
+  </section>
+
+  <!-- Association téléphone -->
+  <section>
+    <h2>2️⃣ Associer une carte à un numéro de téléphone</h2>
+    <input id="assocCardCode" placeholder="Code carte (ex: NSHOP-0001)">
+    <input id="assocPhone" placeholder="Téléphone (ex: 22790000000)">
+    <button id="btnAssign">Associer</button>
+    <pre id="assignResult"></pre>
+  </section>
+
+  <!-- Recharge -->
+  <section>
+    <h2>3️⃣ Recharger une carte via téléphone</h2>
+    <input id="rechargePhone" placeholder="Téléphone">
+    <input id="rechargeAmount" type="number" placeholder="Montant (FCFA)">
+    <button id="btnRecharge">Recharger</button>
+    <pre id="rechargeResult"></pre>
+  </section>
+
+  <!-- Recherche -->
+  <section>
+    <h2>4️⃣ Rechercher les cartes par téléphone</h2>
+    <input id="searchPhone" placeholder="Téléphone">
+    <button id="btnSearch">Rechercher</button>
+    <div id="searchResult"></div>
+  </section>
+
+<script>
+  // 🔐 Configuration Supabase (remplace par tes vraies valeurs)
+  const SUPABASE_URL = "https://xxxxxxxx.supabase.co";
+  const SUPABASE_KEY = "public-anon-key"; // ⚠️ ou clé service_role si local test
+  const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  // 🧩 Génération de carte
+  document.getElementById("btnGenerate").onclick = async () => {
+    const { data, error } = await supabase.rpc("generate_card", { p_prefix: "NSHOP", p_created_by: null });
+    const result = document.getElementById("genResult");
+
+    if (error) result.innerHTML = `<b>Erreur :</b> ${error.message}`;
+    else {
+      const card = data[0];
+      result.innerHTML = `
+        <p><b>Carte générée :</b> ${card.card_code}<br>
+        QR unique : ${card.qr_code}</p>
+        <canvas id="qrcode"></canvas>`;
+      QRCode.toCanvas(document.getElementById("qrcode"), card.qr_code);
+    }
+  };
+
+  // 📞 Associer carte à téléphone
+  document.getElementById("btnAssign").onclick = async () => {
+    const code = document.getElementById("assocCardCode").value;
+    const phone = document.getElementById("assocPhone").value;
+    const { data, error } = await supabase.rpc("assign_card_to_phone", {
+      p_card_code: code, p_phone: phone, p_actor: null, p_idempotency: crypto.randomUUID()
+    });
+    document.getElementById("assignResult").innerText = JSON.stringify({ data, error }, null, 2);
+  };
+
+  // 💰 Recharge par téléphone
+  document.getElementById("btnRecharge").onclick = async () => {
+    const phone = document.getElementById("rechargePhone").value;
+    const amount = parseInt(document.getElementById("rechargeAmount").value);
+    const { data, error } = await supabase.rpc("recharge_by_phone", {
+      p_phone: phone, p_amount: amount, p_actor: null, p_idempotency: crypto.randomUUID()
+    });
+    document.getElementById("rechargeResult").innerText = JSON.stringify({ data, error }, null, 2);
+  };
+
+  // 🔍 Recherche par téléphone
+  document.getElementById("btnSearch").onclick = async () => {
+    const phone = document.getElementById("searchPhone").value;
+    const { data, error } = await supabase.rpc("get_cards_by_phone", { p_phone: phone });
+    const resultDiv = document.getElementById("searchResult");
+    if (error) resultDiv.innerText = "Erreur: " + error.message;
+    else {
+      if (data.length === 0) resultDiv.innerHTML = "<p>Aucune carte trouvée.</p>";
+      else {
+        resultDiv.innerHTML = data.map(c => `
+          <div style="border:1px solid #ddd;padding:10px;margin:5px;border-radius:8px">
+            <b>${c.card_code}</b> — Solde: ${c.balance} FCFA<br>
+            QR: ${c.qr_code} — Statut: ${c.status}<br>
+            Créée le: ${new Date(c.created_at).toLocaleString()}
+          </div>
+        `).join('');
+      }
+    }
+  };
+</script>
+</body>
+</html>
